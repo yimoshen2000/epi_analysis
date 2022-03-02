@@ -1,0 +1,216 @@
+---
+title: "Project 2: Dimension Reduction"
+author: "Yimo Shen"
+date: "02/23/2022"
+output: html_document
+---
+### Part 1 
+#### PCA Function
+```{r}
+# function: my_pca, runs PCA on a data matrix
+# input: 
+#   X: a matrix (or dataframe) to perform PCA on
+#   scale: a logical value, if TRUE then run PCA on the centered and scaled version of X
+#     if FALSE then run PCA on the centered but non-scaled version of X
+# output: 
+#   prin_comps: a matrix That contains the principal component vectors
+#   loadings: a matrix of variable loadings
+#   portion_var:  a vector of variances explained by each principal component
+my_pca <- function(X, scale) {
+  # Mean center each variable of data matrix X to get X*
+  x_centered <- scale(X, scale = FALSE)
+  if (scale) {
+    # Scale each variable of data matrix X* by its standard deviation to get X~
+    x_centered <- scale(X, scale = TRUE)
+  } 
+  # Compute the empirical covariance matrix of X*, S(X*)
+  s_x <- cov(x_centered)
+  # Perform an eigen decomposition, S(X*) = UΛU^T and the columns of U as the loading vectors.
+  loadings <- eigen(s_x)$vectors
+  # Multiple the loadings by the centered matrix X∗ to get the principal component vectors, Y = UX*
+  prin_comps <- x_centered %*% loadings
+  # Compute portion_var by for looping through prin_comps and getting variance of each column
+  portion_var = 0
+  for (i in 1: ncol(prin_comps)) {
+    portion_var[i] <- var(prin_comps[,i])
+  }
+  output <- list(loadings, prin_comps, portion_var)
+  return (output)
+}
+```
+
+#### Function Testing
+```{r}
+set.seed(302)
+X <- matrix(nrow = 4, ncol = 3)
+X[, 1] <- rnorm(4, mean = 0, sd = 1)
+X[, 2] <- rnorm(4, mean = 0, sd = 10)
+X[, 3] <- rnorm(4, mean = 0, sd = 15)
+
+row_names <- c("loadings", "prin_comps", "portion_var")
+my_pca_false <- my_pca(X, scale = FALSE)
+names(my_pca_false) <- row_names
+my_pca_true <- my_pca(X, scale = TRUE)
+names(my_pca_true) <- row_names
+print(my_pca_false)
+print(my_pca_true)
+```
+
+### Part 2 
+#### Introduction
+This project aims to explore the principal components of the dataset "pca_data.csv", which contains information about 29
+different environmental indicators for 180 countries. The indicators fall into two major categories: environmental health and ecosystem vitality. An additional dataset "additional_data.csv" is provided where it provides additional information about each country, including its region, whether it's least developed, whether it's an emerging market, its GDP and its EPI, which is the composite indicator of international environmental performance made up of the indicators in dataset 1, given as a score from 0-100. 
+
+#### Findings
+```{r, echo = FALSE, message = FALSE}
+# attach tidyverse packages 
+library(tidyverse)
+# load data
+pca_data <- read_csv("~/Desktop/UW/3rd Year/Winter 2022/STAT 302/projects/2/Data/pca_data.csv", 
+                     show_col_types = FALSE)
+additional_data <- read_csv("~/Desktop/UW/3rd Year/Winter 2022/STAT 302/projects/2/Data/additional_data.csv", 
+                            show_col_types = FALSE)
+```
+
+```{r, echo = FALSE, message = FALSE}
+# exclude the country name column when passing the data into run_pca()
+result <- my_pca(pca_data[, 2:ncol(pca_data)], scale = TRUE)
+names(result) <- row_names
+# plot the loadings for the first two principal components 
+plot_loadings <- data.frame(loading1 = result$loadings[, 1], 
+                            loading2 = result$loadings[, 2], 
+                            name = names(pca_data[,2:ncol(pca_data)]))
+ggplot(plot_loadings, aes(x = loading1, y = loading2, label = name)) + 
+  geom_point() + 
+  geom_text(size = 4, nudge_x = .02, nudge_y = .02) + 
+  labs(x = "Loadings for Principal Component 1", 
+       y = "Loadings for Principal Component 2", 
+       title = "Loadings for First Two Principal Components of Dataset 1") + 
+  theme_bw(base_size = 12) + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+This plot displays the loadings for the first two principal components. The upper left cluster of environmental index indicators shows similar, moderate to strong correlation to the first 2 principal components where they positively correlate with the second principal component and negatively correlate with the first principal component. \
+&nbsp;
+\
+&nbsp;
+
+```{r, echo = FALSE, message = FALSE}
+# Plot the first two principal components of the data 
+plot_pc <- data.frame(pc1 = result$prin_comps[, 1], 
+                      pc2 = result$prin_comps[, 2], 
+                      name = pca_data$country)
+# Chose 8 countries spread around the world with various economic conditions
+text_pc <- plot_pc %>% filter(name %in% c("Switzerland", "Taiwan","Poland", "Ukraine",
+                                          "Qatar", "Brazil", "India", "Ghana"))
+ggplot(plot_pc, aes(x = pc1, y = pc2, label = name)) + geom_point(alpha = 0.3) + 
+  geom_text(data = text_pc, size = 4, nudge_x = 0.2, nudge_y = 0.2) + 
+  labs(x = "Principal Component 1", 
+       y = "Principal Component 2", 
+       title = "First Two Principal Components of Dataset 1") + 
+  theme_bw(base_size = 12) + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+This plot displays 8 countries' relationships between the two principal components. Switzerland and India are on similar levels compared to the second principal component, but they are on opposite ends in relation to the first principal component. Also countries located in the global north is on the left side of the plot (negative pc1) while countries in the global south are on the right side of the plot (positive pc1).\
+&nbsp;
+\
+&nbsp;
+
+```{r, echo = FALSE, message = FALSE}
+# a scree plot for the proportion of variance explained by each principal component
+plot_scree <- data.frame(pc = c(1:ncol(result$prin_comps)), pvar = result$portion_var/sum(result$portion_var))
+ggplot(plot_scree, aes(x = pc, y = pvar)) + 
+  geom_line() + 
+  geom_point() + 
+  labs(x = "Principal Components", 
+       y = "Proportion  of Variances Explained", 
+       title = "Scree Plot of Dataset 1") + 
+  theme_bw(base_size = 12) + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+The scree plot above displays the proportion of variance explained by each principal component. The ideal number of principal components to be used for this dataset is 4, as the first 4 components explained most of the variances and the remaining 25 made marginal differences. \
+&nbsp;
+\
+&nbsp;
+
+```{r, echo = FALSE, message = FALSE}
+# join the two datasets using the function left_join()
+combined_data <- left_join(pca_data, additional_data)
+plot_ldc <- data.frame(pc1 = result$prin_comps[, 1], 
+                      pc2 = result$prin_comps[, 2], 
+                      name = combined_data$country,
+                      least_developed = combined_data$ldc)
+ggplot(plot_ldc, aes(x = pc1, y = pc2, label = name, color = as.factor(least_developed))) + 
+  geom_point() + 
+  labs(x = "Principal Component 1", 
+       y = "Principal Component 2", 
+       color = "Least Developed Countries",
+       title = "First Two Principal Components of Dataset 1") + 
+  theme_bw(base_size = 12) + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r, echo = FALSE, message = FALSE}
+plot_gdp <- data.frame(pc1 = result$prin_comps[, 1], 
+                      pc2 = result$prin_comps[, 2], 
+                      name = combined_data$country,
+                      gdp = combined_data$gdp)
+ggplot(plot_gdp, aes(x = pc1, y = pc2, label = name, color = gdp)) + 
+  geom_point(size = 3) + 
+  labs(x = "Principal Component 1", 
+       y = "Principal Component 2", 
+       color = "GDP of Each Country in 2020",
+       title = "First Two Principal Components of Dataset 1") + 
+  theme_bw(base_size = 12) + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r, echo = FALSE, message = FALSE}
+plot_region <- data.frame(pc1 = result$prin_comps[, 1], 
+                      pc2 = result$prin_comps[, 2], 
+                      name = combined_data$country,
+                      region = combined_data$region)
+ggplot(plot_region, aes(x = pc1, y = pc2, label = name, color = region)) + 
+  geom_point(size = 3) + 
+  labs(x = "Principal Component 1", 
+       y = "Principal Component 2", 
+       color = "Region of Each Country",
+       title = "First Two Principal Components of Dataset 1") + 
+  theme_bw(base_size = 12) + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+The three plots displayed above aim to investigate variables displayed in the "additional_data.csv" file and their relation to the first principal component. It turns out, from the first plot, the least developed countries have a higher level of principal component 1; from the second plot, countries with the lowest GDPs have a higher level of principal component 1; from the third plot, countries located in the global south have a higher level of principal component 1. \
+&nbsp;
+\
+&nbsp;
+
+```{r, echo = FALSE, message = FALSE}
+plot_epi <- data.frame(pc1 = result$prin_comps[, 1], 
+                      pc2 = result$prin_comps[, 2], 
+                      name = combined_data$country,
+                      epi = combined_data$EPI_cat)
+ggplot(plot_epi, aes(x = pc1, y = pc2, label = name, color = epi)) + 
+  geom_point(size = 3) + 
+  labs(x = "Principal Component 1", 
+       y = "Principal Component 2", 
+       color = "EPI of Each Country",
+       title = "First Two Principal Components of Dataset 1") + 
+  theme_bw(base_size = 12) + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+This plot compares the first principle component to the EPI score of each country. Since the first principle component captures the most portion of variances explained in the dataset, I expected it to have some correlation with the EPI score, which was created based on all indicators within this dataset. It turns out, countries with a lower principle component 1 has a higher EPI score, and vice versa. \
+&nbsp;
+\
+&nbsp;
+
+#### Conclusion
+The findings of this project reveal the correlation between economic conditions of a country and its environmental performance. The more developed countries where they typically have higher GDPs and are located in the global north tend to have a higher EPI score, which isn't a surprise as those countries have the resources they need to develop technologies to reduce pollution and waste. On the other hand, the least developed countries where they typically have lower GDPs and are located in the global south tend to have a lower EPI score, suggesting that wealth disparity is a significant factor in a country's environmental performance. 
+
+
+
+
+
+
+
